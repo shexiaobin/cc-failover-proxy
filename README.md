@@ -1,15 +1,8 @@
 # cc-failover-proxy
 
-A tiny local proxy that keeps **Claude Code** working when your primary quota runs
-out — by transparently failing over to a backup Anthropic-compatible endpoint,
-**without restarting Claude Code**.
+**Hit Claude Code's 5-hour usage limit? Keep working.**
 
-Point Claude Code at this proxy once. It forwards to your primary upstream
-(e.g. the OAuth subscription via `api.anthropic.com`, passing through whatever
-auth header Claude Code already sends). When the primary returns `429`/`529`
-(quota/rate-limit exhausted), the proxy switches to a configured fallback
-endpoint, rewriting the model name if needed. When the primary recovers, it
-switches back automatically. Claude Code never notices.
+Claude Code's subscription enforces a rolling 5-hour usage cap. Hit it, and you're normally stuck waiting for the quota to reset. This proxy sits in front of Claude Code and, the moment you're rate-limited, **transparently fails over to a backup API** so you keep working. Once your quota refreshes, it **switches back automatically**. No restart, no manual switching, no interruption.
 
 ```
 Claude Code ──> cc-failover-proxy ──┬─ PRIMARY  (your subscription, pass-through)
@@ -19,12 +12,7 @@ Claude Code ──> cc-failover-proxy ──┬─ PRIMARY  (your subscription, 
 
 ## Why
 
-Claude Code's subscription has a rolling session limit. Normally, hitting it
-means waiting or manually switching accounts and restarting. Since
-`ANTHROPIC_BASE_URL` is read once at startup, you can't hot-swap a running
-session. This proxy moves the switch **out** of Claude Code: Claude Code always
-talks to a fixed local address, and the upstream switch happens inside the proxy,
-live.
+Since `ANTHROPIC_BASE_URL` is read once at process startup, you can't hot-swap a running Claude Code session. This proxy moves the switch **out** of Claude Code: it always talks to a fixed local address (`127.0.0.1:8788`), and the upstream switch happens inside the proxy, live. You configure it once and never think about it again.
 
 ## Features
 
