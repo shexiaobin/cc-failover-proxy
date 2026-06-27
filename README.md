@@ -1,5 +1,7 @@
 # cc-failover-proxy
 
+[![CI](https://github.com/shexiaobin/cc-failover-proxy-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/shexiaobin/cc-failover-proxy-oss/actions/workflows/ci.yml)
+
 **Hit Claude Code's 5-hour usage limit? Keep working.**
 
 Claude Code's subscription enforces a rolling 5-hour usage cap. Hit it, and you're normally stuck waiting for the quota to reset. This proxy sits in front of Claude Code and, the moment you're rate-limited, **transparently fails over to a backup API** so you keep working. Once your quota refreshes, it **switches back automatically**. No restart, no manual switching, no interruption.
