@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Install cc-failover-proxy + watchdog as macOS LaunchAgents.
-# Plists are GENERATED here with the correct absolute paths for wherever you
-# cloned the repo, so nothing is hardcoded to a particular machine/user.
+# Plists are GENERATED here (via Python plistlib, so paths with spaces/&/< are
+# handled correctly and there is no shell-string injection) with absolute paths
+# for wherever you cloned the repo. Nothing is hardcoded to a machine/user.
 #
 # Linux users: this script is macOS (launchd) only. Run `./run.sh` under your
 # own supervisor (systemd unit, supervisord, etc.) and a 60s cron for watchdog.sh.
@@ -16,37 +17,36 @@ AGENTS="$HOME/Library/LaunchAgents"
 PORT="${PROXY_PORT:-8788}"
 mkdir -p "$AGENTS"
 
-gen_plist() {  # label  program-args-xml  extra-keys-xml
-  local label="$1" args="$2" extra="$3"
-  cat > "$AGENTS/$label.plist" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key><string>$label</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/bin/zsh</string><string>-lc</string>
-    <string>$args</string>
-  </array>
-  <key>WorkingDirectory</key><string>$ROOT</string>
-$extra
-  <key>StandardOutPath</key><string>${TMPDIR:-/tmp}/$label.out.log</string>
-  <key>StandardErrorPath</key><string>${TMPDIR:-/tmp}/$label.err.log</string>
-</dict>
-</plist>
-PLIST
+# gen_plist <label> <script-to-exec> <proxy|watchdog>
+# Values are passed through the environment (never interpolated into code or
+# XML), and plistlib does all XML escaping — so any path is safe.
+gen_plist() {
+  PL_LABEL="$1" PL_SCRIPT="$2" PL_MODE="$3" PL_ROOT="$ROOT" \
+  PL_OUT="${TMPDIR:-/tmp}/$1.out.log" PL_ERR="${TMPDIR:-/tmp}/$1.err.log" \
+  PL_DST="$AGENTS/$1.plist" python3 - <<'PY'
+import os, plistlib
+# zsh -lc 'exec "$1"' <label> <script>: runs the script with a login-shell PATH
+# while passing its path as a separate argv element (no shell interpolation).
+d = {
+    "Label": os.environ["PL_LABEL"],
+    "ProgramArguments": ["/bin/zsh", "-lc", 'exec "$1"',
+                         os.environ["PL_LABEL"], os.environ["PL_SCRIPT"]],
+    "WorkingDirectory": os.environ["PL_ROOT"],
+    "StandardOutPath": os.environ["PL_OUT"],
+    "StandardErrorPath": os.environ["PL_ERR"],
+    "RunAtLoad": True,
+}
+if os.environ["PL_MODE"] == "proxy":
+    d["KeepAlive"] = True
+else:
+    d["StartInterval"] = 60
+with open(os.environ["PL_DST"], "wb") as f:
+    plistlib.dump(d, f)
+PY
 }
 
-# Proxy: start at load, keep alive on crash.
-gen_plist "$PROXY_LABEL" "cd '$ROOT' && exec ./run.sh" \
-  "  <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>"
-
-# Watchdog: run every 60s.
-gen_plist "$WD_LABEL" "exec '$ROOT/scripts/watchdog.sh'" \
-  "  <key>RunAtLoad</key><true/>
-  <key>StartInterval</key><integer>60</integer>"
+gen_plist "$PROXY_LABEL" "$ROOT/run.sh"            proxy
+gen_plist "$WD_LABEL"    "$ROOT/scripts/watchdog.sh" watchdog
 
 for L in "$PROXY_LABEL" "$WD_LABEL"; do
   launchctl bootout "$DOMAIN/$L" 2>/dev/null || true

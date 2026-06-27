@@ -35,8 +35,11 @@ emit() {
     local msg="$1"
     printf '%s | %s\n' "$ts" "$msg" > "$ALERT_FILE"
     printf '%s | %s\n' "$ts" "$msg" >> "$LOG"
+    # NOTIFY_CMD must be a path to an executable/script; it receives the message
+    # as a single argument ($1). It is exec'd directly (no `sh -c`), so values
+    # like `a; rm -rf` are passed as a literal program name, not run as shell.
     if [ -n "$NOTIFY_CMD" ]; then
-        sh -c "$NOTIFY_CMD \"\$1\"" _ "[cc-failover-proxy] $msg" >/dev/null 2>&1 || true
+        "$NOTIFY_CMD" "[cc-failover-proxy] $msg" >/dev/null 2>&1 || true
     fi
 }
 
